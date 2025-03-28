@@ -77,6 +77,7 @@ def open_code(code):
     print("\n--INSERT--")
 
 code = []
+codename
 
 while True:
     name, command = terminal()
@@ -88,5 +89,6 @@ while True:
                 open_code(code)
         if command == "python3":
             operate_the_code(code)
+        
     else:
         print("\033[41mE32: No file name\033[0m")
