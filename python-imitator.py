@@ -1,5 +1,40 @@
 import re
 
+def if_function(steps, index, line):
+    results = []
+    results = segments_function(steps, index, line, results)
+
+    result = ' '.join(map(str, results))
+    result = result.strip(":")
+    if eval(result):
+        #print("#True")
+        return True
+    else:
+        #print("#False")
+        return False
+
+def print_function(line):
+    result = line.replace("print(", "").replace(")", "")
+    return result
+
+def segments_function(steps, index, line, results):
+    conditions = ["<", ">", "==", "!=", ":"]
+    segment = []
+    results = []
+    steps.append(":")
+    for el in steps:
+        if not el in conditions:
+            segment.append(el)
+        else:
+            result = calculate(segment, index, line)
+            results.append(result)
+            results.append(el)
+            segment = []
+    
+    #print(segment)
+    #print(f"#{results}")
+    return results
+
 def operation_steps(line):
     line = line.strip("if while for :")
     steps = re.split(r'\s+', line)
@@ -14,34 +49,16 @@ def calculate(steps, index, line):
 
 def operate_the_code(code):
     all_commands = ("if", "while", "for", "print", "def")
-    results = []
     for line in code:
         steps = operation_steps(line)
-        index = code.index(line)
-        segment = []
-        conditions = ["<", ">", "==", "!=", ":"]
-        steps.append(":")
-        if line.startswith("if"):
-            for el in steps:
-                if not el in conditions:
-                    segment.append(el)
-                else:
-                    result = calculate(segment, index, line)
-                    results.append(result)
-                    results.append(el)
-                    segment = []
-            
-            #print(segment)
-            #print(f"#{results}")
+        line_index = code.index(line)
 
-            result = ' '.join(map(str, results))
-            result = result.strip(":")
-            if eval(result):
-                print("#True")
-                return True
-            else:
-                print("#False")
-                return False
+        if line.startswith("if"):
+            result = if_function(steps, line_index, line)
+            
+        if line.startswith("print("):
+            result = print_function(line)
+            print(result)
 
 def terminal():
     while True:
@@ -59,17 +76,17 @@ def get_code():
 
 def command_result(command):
     if command.startswith("vim "):
-       name = command.strip("vim ")
-       return name, "vim"
+        name = command.replace("vim ", "", 1)
+        return name, "vim"
     if command.startswith("python3 "):
-       name = command.strip("python3 ")
-       return name, "python3"
+        name = command.replace("python3 ", "", 1)
+        return name, "python3"
     if command == "ls":
-        return None, "ls"
+        return '', "ls"
     if command == "help":
         print("\nvim <name> # create a new project")
         print("python3 <name> # run project\n")
-        return None, "help"
+        return '', "help"
     
 def open_code(code):
     for line in code:
@@ -77,18 +94,22 @@ def open_code(code):
     print("\n--INSERT--")
 
 code = []
-codename
+code_name = ''
 
 while True:
     name, command = terminal()
-    if len(name) != 0:
+    #print(name, command)
+    if code_name == '':
+        code_name = name
+    if command == "ls":
+        print(code_name)
+    if len(name) != 0 and command != "ls" or command != "help":
         if command == "vim":
-            if len(code) == 0:
+            if len(code) == 0 or name != code_name:
                 code = get_code()
             else:
                 open_code(code)
-        if command == "python3":
+        if command == "python3" and name == code_name:
             operate_the_code(code)
-        
     else:
         print("\033[41mE32: No file name\033[0m")
