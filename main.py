@@ -1,9 +1,9 @@
 import re
 
 def if_function(line):
-    line = line.strip("if:")
+    line = line.strip("if :")
     conditions = ("and", "or", "not")
-    steps = re.split(r"and|or|not|==|>|<")
+    steps = re.split(r'\s+', line)
     print(steps)
 
 def operate_the_code(code):
@@ -13,7 +13,6 @@ def operate_the_code(code):
             if_function(line)
 
 def terminal():
-    #commands = ("vim", "python3", "ls", "help")
     while True:
         command = input("@Python-Imitator:~# ")
         if command.startswith("vim ") or command.startswith("python3 ") or command == "ls" or command == "help":
