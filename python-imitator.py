@@ -1,5 +1,17 @@
 import re
 
+def previous_condition(results_of_all_conditions, line_index):
+    if results_of_all_conditions:
+        smallest_result = next(reversed(results_of_all_conditions))
+    else:
+        return True
+
+    return smallest_result
+
+def correct_tabs(line):
+    tabs_count = (len(line) - len(line.lstrip())) / 4
+    return tabs_count
+
 def if_function(steps, index, line):
     results = []
     results = segments_function(steps, index, line, results)
@@ -12,6 +24,7 @@ def if_function(steps, index, line):
     else:
         #print("#False")
         return False
+    return None
 
 def print_function(line):
     result = line.replace("print(", "").replace(")", "")
@@ -49,16 +62,22 @@ def calculate(steps, index, line):
 
 def operate_the_code(code):
     all_commands = ("if", "while", "for", "print", "def")
+    results_of_all_conditions = {}
     for line in code:
         steps = operation_steps(line)
         line_index = code.index(line)
+        tabs_count = correct_tabs(line)
+        line_without_tabs = line.lstrip()
 
-        if line.startswith("if"):
-            result = if_function(steps, line_index, line)
+        if previous_condition(results_of_all_conditions, line_index):
+            if line_without_tabs.startswith("if"):
+                result = if_function(steps, line_index, line_without_tabs)
+                results_of_all_conditions[result] = line_index
             
-        if line.startswith("print("):
-            result = print_function(line)
-            print(result)
+            if line_without_tabs.startswith("print(") and line_without_tabs.endswith(")"):
+                result = print_function(line_without_tabs)
+                print(result)
+
 
 def terminal():
     while True:
@@ -90,7 +109,8 @@ def command_result(command):
     
 def open_code(code):
     for line in code:
-        print("\033[34m~\033[0m", line)
+        index = code.index(line) + 1
+        print(f"\033[34m{index}\033[0m", line)
     print("\n--INSERT--")
 
 code = []
@@ -103,7 +123,7 @@ while True:
         code_name = name
     if command == "ls":
         print(code_name)
-    if len(name) != 0 and command != "ls" or command != "help":
+    if len(name) != 0 or command != "ls" or command != "help":
         if command == "vim":
             if len(code) == 0 or name != code_name:
                 code = get_code()
