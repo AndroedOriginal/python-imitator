@@ -1,7 +1,26 @@
 import re
 
-def previous_condition(results_of_all_conditions, line_index):
-    if results_of_all_conditions:
+def convert_value(line):
+    name = []
+    for x in line:
+        if not x == "=":
+            name.append(x)
+        else:
+            break
+    name = ''.join(name).replace(" ", "")
+    value = line.replace(name, "").replace("=", "").replace(" ", "")
+
+    variables[name] = value
+    return variables
+
+def safe_eval(expression):
+    try:
+        return eval(expression, {"__builtins__": None}, variables)
+    except Exception:
+        return False
+
+def previous_condition(results_of_all_conditions, tabs_count):
+    if results_of_all_conditions and tabs_count > 0:
         smallest_result = next(reversed(results_of_all_conditions))
     else:
         return True
@@ -27,7 +46,10 @@ def if_function(steps, index, line):
     return None
 
 def print_function(line):
-    result = line.replace("print(", "").replace(")", "")
+    result = line.replace("print(", "").replace(")", "").replace('"', "")
+    if not '"' in line and result in variables:
+        result = variables[result]
+
     return result
 
 def segments_function(steps, index, line, results):
@@ -54,22 +76,28 @@ def operation_steps(line):
     return steps
 
 def calculate(steps, index, line):
+    for step in steps:
+        if step in variables:
+            steps[steps.index(step)] = variables[step]
     steps_str = ''.join(steps)
-    if re.fullmatch(r'[0-9+\-*/().\s]+', steps_str):
+    if safe_eval(steps_str):
         return eval(steps_str)
     else:
-        return f"\033[41mDangerous input!\033[0m\n{index} line \033[31m{line}\033[0m"
+        return f"\033[41mDangerous input!\033[0m\n{index+1} line \033[31m{line}\033[0m"
 
 def operate_the_code(code):
+    global variables
     all_commands = ("if", "while", "for", "print", "def")
     results_of_all_conditions = {}
+    variables = {}
+
     for line in code:
         steps = operation_steps(line)
         line_index = code.index(line)
         tabs_count = correct_tabs(line)
         line_without_tabs = line.lstrip()
 
-        if previous_condition(results_of_all_conditions, line_index):
+        if previous_condition(results_of_all_conditions, tabs_count):
             if line_without_tabs.startswith("if"):
                 result = if_function(steps, line_index, line_without_tabs)
                 results_of_all_conditions[result] = line_index
@@ -78,6 +106,8 @@ def operate_the_code(code):
                 result = print_function(line_without_tabs)
                 print(result)
 
+            if "=" in line_without_tabs and not line_without_tabs.startswith(("while", "if", "elif")):
+                variables = convert_value(line_without_tabs)
 
 def terminal():
     while True:
