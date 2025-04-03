@@ -89,7 +89,12 @@ def if_function(steps, index, line):
 def print_function(line):
     result = line.replace("print(", "").replace(")", "").replace('"', "")
     if not '"' in line and result in variables:
-        result = variables[result]
+        if len(variables[result]) == 1:
+            result = variables[result]
+        elif len(variables[result]) == 4:
+            result = variables[result][0]
+    elif not result in variables and not '"' in line:
+        return f"NameError: name '{result}' is not defined"
 
     return result
 
@@ -136,6 +141,7 @@ def operate_the_code(code, spaces_in_tab):
     variables = {}
     while_dictionary = {}
     index = 0
+    for_value = 0
 
     while index < len(code):
         line = code[index]
@@ -157,6 +163,49 @@ def operate_the_code(code, spaces_in_tab):
             if "=" in line_without_tabs and not line_without_tabs.startswith(("while", "if", "elif")):
                 variables = convert_value(line_without_tabs, line_index)
             
+            if line_without_tabs.startswith("for"):
+                result = line_without_tabs.replace("for ", "").replace(":", "").replace("range", "")
+                #print(f"#result: {result}")
+
+                local_variable_name = []
+                for i in range(len(result)):
+                    if result[i+1] == "i" and result[i+2] == "n":
+                        break
+                    local_variable_name.append(result[i])
+
+                local_variable_name = ''.join(local_variable_name).strip()
+                value_start = []
+                value_end = []
+                result = result.replace(local_variable_name, "").replace("in", "").replace("(", "")
+                #print(f"#result: {result}")
+
+                for i in range(len(result)):
+                    if result[i] == ",":
+                        break
+                    value_start.append(result[i])
+                
+                value_start = ''.join(value_start).strip()
+                result = result.replace(f"{value_start}, ", "")
+
+                for i in range(len(result)):
+                    if result[i] == ")":
+                        break
+                    value_end.append(result[i])
+
+                value_end = ''.join(value_end).strip()
+                value_end.replace(")", "")
+                value_start = int(value_start)
+                if for_value == 0:
+                    for_value = value_start
+                
+                #print(f"#local variable:\n#Name {local_variable_name} #Value {value_start}, {value_end}, {for_value}")
+
+                for_value = int(for_value)
+                value_end = int(value_end)
+                #print(for_value)
+                variables[local_variable_name] = (for_value, value_end, tabs_count, index)
+                #print(for_value)
+
             if line_without_tabs.startswith("while"):
                 result = if_function(steps, line_index, line_without_tabs)
 
@@ -171,16 +220,15 @@ def operate_the_code(code, spaces_in_tab):
                             if next_tabs <= tabs_count:
                                 while_skipping = False
                     continue
-                
+
                 #print("#dictionary:", while_dictionary)
             #print("#variables:", variables)
             
             if while_dictionary:
                 last_while = next(reversed(while_dictionary))
                 if tabs_count == while_dictionary[last_while] or index+1 == len(code):
-                    # Перед возвратом проверяем условие
                     while_line = code[last_while]
-                    steps = operation_steps(while_line.lstrip()[6:])  # Берем часть после "while "
+                    steps = operation_steps(while_line.lstrip()[6:])
                     result = if_function(steps, last_while, while_line)
                     
                     if not result:
@@ -189,6 +237,19 @@ def operate_the_code(code, spaces_in_tab):
                         continue
                         
                     index = last_while
+
+            if variables:
+                for el in variables:
+                    if variables[el][0] < variables[el][1]:
+                        #print("#el:", variables[el][0])
+                        if tabs_count == variables[el][2] or index+1 == len(code):
+                            index = variables[el][3]
+                            variables[local_variable_name] = (for_value, value_end, tabs_count, index)
+                            for_value += 1
+                    else:
+                        del variables[local_variable_name]
+                        break
+
 
         index += 1
 
@@ -232,7 +293,7 @@ def open_code(code):
 
 code = []
 code_name = ''
-spaces_in_tab = 4
+spaces_in_tab = 6
 
 while True:
     value, command = terminal()
