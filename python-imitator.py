@@ -1,5 +1,12 @@
 import re
 
+def add_or_move_to_end(variables, key, value):
+    if key in variables:
+        val = variables.pop(key)
+        variables[key] = val       
+    else:
+        variables[key] = value
+
 def calculate_variable(line, full_line, index):
     name = []
     steps = []
@@ -62,12 +69,14 @@ def safe_eval(expression):
         return False
 
 def previous_condition(results_of_all_conditions, tabs_count):
+    #print("#tabs count:", tabs_count)
     if results_of_all_conditions and tabs_count > 0:
-        smallest_result = next(reversed(results_of_all_conditions))
+        last_result = next(reversed(results_of_all_conditions))
+        #print("last result:", last_result)
+        return last_result
     else:
+        #print("#Just 'True'")
         return True
-
-    return smallest_result
 
 def correct_tabs(line, spaces_in_tab):
     tabs_count = (len(line) - len(line.lstrip())) // spaces_in_tab
@@ -88,11 +97,15 @@ def if_function(steps, index, line):
 
 def print_function(line):
     result = line.replace("print(", "").replace(")", "").replace('"', "")
+    #print(not '"' in line)
+    #print(result in variables)
+    #print(variables, result)
     if not '"' in line and result in variables:
-        if len(variables[result]) == 1:
-            result = variables[result]
-        elif len(variables[result]) == 4:
+        #print("true")
+        if hasattr(variables[result], '__len__'):
             result = variables[result][0]
+        else:
+            result = variables[result]
     elif not result in variables and not '"' in line:
         return f"NameError: name '{result}' is not defined"
 
@@ -104,29 +117,40 @@ def segments_function(steps, index, line, results):
     results = []
     steps.append(":")
     for el in steps:
-        if not el in conditions:
+        if el == ":":
+            if segment:
+                result = calculate(segment, index, line)
+                results.append(result)
+            break
+        elif el not in conditions:
             segment.append(el)
         else:
             result = calculate(segment, index, line)
             results.append(result)
             results.append(el)
             segment = []
-    
+
     #print(segment)
     #print(f"#{results}")
     return results
 
 def operation_steps(line):
-    line = line.strip("if while for :")
+    line = line.replace("if", "").replace("while", "").replace("for", "").replace(":", "")
     steps = re.split(r'\s+', line)
     return steps
 
 def calculate(steps, index, line):
-    for step in steps:
-        if step in variables:
-            steps[steps.index(step)] = variables[step]
+    #print(f"{index}: calculate: {line}")
+    for i, step in enumerate(steps):
+        if isinstance(step, str) and step in variables:
+            val = variables[step]
+            if isinstance(val, tuple):
+                val = val[0]  # берём только само значение, а не служебные данные
+            steps[i] = val
+
     steps = [str(step) for step in steps]
-    steps_str = ' '.join(steps)  # Используем пробелы для корректного eval
+    steps_str = ' '.join(steps)
+    #print(steps_str)
     
     try:
         return eval(steps_str, {"__builtins__": None}, variables)
@@ -136,25 +160,31 @@ def calculate(steps, index, line):
 
 def operate_the_code(code, spaces_in_tab):
     global variables
-    all_commands = ("if", "while", "for", "print", "def")
     results_of_all_conditions = {}
     variables = {}
     while_dictionary = {}
     index = 0
     for_value = 0
 
-    while index < len(code):
-        line = code[index]
-
+    while index <= len(code):
+        if index != len(code) or index > len(code):
+            line = code[index]
+        #print("\033[90m#variables:", variables,"\033[0m")
+        
         steps = operation_steps(line)
         line_index = code.index(line)
         tabs_count = correct_tabs(line, spaces_in_tab)
         line_without_tabs = line.lstrip()
 
-        if previous_condition(results_of_all_conditions, tabs_count):
+        #print(f"\033[90m#tabs count: {tabs_count}, #line({index}): {line_without_tabs}\033[0m")
+
+        if previous_condition(results_of_all_conditions, tabs_count) == True:
             if line_without_tabs.startswith("if"):
                 result = if_function(steps, line_index, line_without_tabs)
+                if result in results_of_all_conditions:
+                    del results_of_all_conditions[result]
                 results_of_all_conditions[result] = line_index
+                #print("\033[90m#results of all conditions:", results_of_all_conditions)
             
             if line_without_tabs.startswith("print(") and line_without_tabs.endswith(")"):
                 result = print_function(line_without_tabs)
@@ -165,7 +195,7 @@ def operate_the_code(code, spaces_in_tab):
             
             if line_without_tabs.startswith("for"):
                 result = line_without_tabs.replace("for ", "").replace(":", "").replace("range", "")
-                #print(f"#result: {result}")
+                #print(f"\033[90m#result: {result}")
 
                 local_variable_name = []
                 for i in range(len(result)):
@@ -174,10 +204,11 @@ def operate_the_code(code, spaces_in_tab):
                     local_variable_name.append(result[i])
 
                 local_variable_name = ''.join(local_variable_name).strip()
+                local_variable_name.replace("'", "")
                 value_start = []
                 value_end = []
                 result = result.replace(local_variable_name, "").replace("in", "").replace("(", "")
-                #print(f"#result: {result}")
+                #print(f"\033[90mm#result: {result}\033[0m")
 
                 for i in range(len(result)):
                     if result[i] == ",":
@@ -198,12 +229,12 @@ def operate_the_code(code, spaces_in_tab):
                 if for_value == 0:
                     for_value = value_start
                 
-                #print(f"#local variable:\n#Name {local_variable_name} #Value {value_start}, {value_end}, {for_value}")
+                #print(f"\033[90m#local variable:\n#Name {local_variable_name} #Value {value_start}, {value_end}, {for_value}\033[0m")
 
                 for_value = int(for_value)
                 value_end = int(value_end)
                 #print(for_value)
-                variables[local_variable_name] = (for_value, value_end, tabs_count, index)
+                variables[local_variable_name] = for_value, (value_end, tabs_count, index)
                 #print(for_value)
 
             if line_without_tabs.startswith("while"):
@@ -221,8 +252,7 @@ def operate_the_code(code, spaces_in_tab):
                                 while_skipping = False
                     continue
 
-                #print("#dictionary:", while_dictionary)
-            #print("#variables:", variables)
+                #print("\033[90m#dictionary:", while_dictionary,"\033[0m")
             
             if while_dictionary:
                 last_while = next(reversed(while_dictionary))
@@ -238,19 +268,25 @@ def operate_the_code(code, spaces_in_tab):
                         
                     index = last_while
 
-            if variables:
-                for el in variables:
-                    if variables[el][0] < variables[el][1]:
-                        #print("#el:", variables[el][0])
-                        if tabs_count == variables[el][2] or index+1 == len(code):
-                            index = variables[el][3]
-                            variables[local_variable_name] = (for_value, value_end, tabs_count, index)
+        if variables:
+            for el in variables:
+                if hasattr(variables[el], '__len__'):
+                    if variables[el][0] != variables[el][1][0]:
+                        #print(f"\033[90m# {tabs_count} == {variables[el][1][1]}:", tabs_count == variables[el][1][1], "(tabs count)\033[0m")
+                        #print(f"\033[90m# {index+1} == {len(code)}:",  index+1 == len(code), "(code end)\033[0m")
+                        if index == len(code) or tabs_count == variables[el][1][1] and line_without_tabs != "":
+                            #print(f"\033[90m# index({index}) = {variables[el][1][2]}\033[0m")
+                            index = variables[el][1][2]
+                            if True in results_of_all_conditions:
+                                del results_of_all_conditions[True]
+                            results_of_all_conditions[True] = line_index
+                            variables[local_variable_name] = for_value, (value_end, tabs_count, index)
                             for_value += 1
                     else:
                         del variables[local_variable_name]
+                        results_of_all_conditions[True] = line_index
                         break
-
-
+                    
         index += 1
 
 def terminal():
@@ -293,12 +329,12 @@ def open_code(code):
 
 code = []
 code_name = ''
-spaces_in_tab = 6
+spaces_in_tab = 1
 
 while True:
     value, command = terminal()
     #print(value, command)
-    if code_name == '':
+    if code_name == '' and command != "sit":
         code_name = value
     if command == "ls":
         print(code_name)
@@ -316,6 +352,6 @@ while True:
                 print(f"ValueError: sit[\033[41m{value}\033[0m]")
                 break
             else:
-                spaces_in_tab = value
+                spaces_in_tab = int(value)
     else:
         print("\033[41mE32: No file name\033[0m")
