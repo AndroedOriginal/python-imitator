@@ -1,4 +1,8 @@
 import re
+import sys
+import termios
+import tty
+
 
 def add_or_move_to_end(variables, key, value):
     if key in variables:
@@ -8,6 +12,7 @@ def add_or_move_to_end(variables, key, value):
         variables[key] = value
 
 def calculate_variable(line, full_line, index):
+    global debug_mode, debug_text_color
     name = []
     steps = []
     value = 0
@@ -69,39 +74,39 @@ def safe_eval(expression):
         return False
 
 def previous_condition(results_of_all_conditions, tabs_count):
-    #print("#tabs count:", tabs_count)
+    global debug_mode, debug_text_color
     if results_of_all_conditions and tabs_count > 0:
         last_result = next(reversed(results_of_all_conditions))
-        #print("last result:", last_result)
+        if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}last result:", last_result, "\033[0m")
         return last_result
     else:
-        #print("#Just 'True'")
+        if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#last result: True")
         return True
 
 def correct_tabs(line, spaces_in_tab):
+    global debug_mode, debug_text_color
     tabs_count = (len(line) - len(line.lstrip())) // spaces_in_tab
+    if debug_mode == "default" or debug_mode == "all": print(f"{debug_text_color}#tabs count:", tabs_count, "\033[0m") 
     return tabs_count
 
 def if_function(steps, index, line):
+    global debug_mode, debug_text_color
     results = []
     results = segments_function(steps, index, line, results)
 
     result = ' '.join(map(str, results))
     result = result.strip(":")
     if eval(result):
-        #print("#True")
+        if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#if result({index}):", True, "\033[0m")
         return True
     else:
-        #print("#False")
+        if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#if result({index}):", False, "\033[0m") 
         return False
 
 def print_function(line):
+    global debug_mode, debug_text_color
     result = line.replace("print(", "").replace(")", "").replace('"', "")
-    #print(not '"' in line)
-    #print(result in variables)
-    #print(variables, result)
     if not '"' in line and result in variables:
-        #print("true")
         if hasattr(variables[result], '__len__'):
             result = variables[result][0]
         else:
@@ -112,6 +117,7 @@ def print_function(line):
     return result
 
 def segments_function(steps, index, line, results):
+    global debug_mode, debug_text_color
     conditions = ["<", ">", "==", "!=", ":"]
     segment = []
     results = []
@@ -140,25 +146,28 @@ def operation_steps(line):
     return steps
 
 def calculate(steps, index, line):
+    global debug_mode, debug_text_color
     #print(f"{index}: calculate: {line}")
     for i, step in enumerate(steps):
         if isinstance(step, str) and step in variables:
             val = variables[step]
             if isinstance(val, tuple):
-                val = val[0]  # берём только само значение, а не служебные данные
+                val = val[0]
             steps[i] = val
 
     steps = [str(step) for step in steps]
     steps_str = ' '.join(steps)
-    #print(steps_str)
+    if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#calculation steps:", steps_str, "\033[0m") 
     
     try:
+        if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#calculation result:", eval(steps_str, {"__builtins__": None}, variables), "\033[0m") 
         return eval(steps_str, {"__builtins__": None}, variables)
     except Exception:
         print(f"\033[41mDangerous input!\033[0m\n{index+1} line \033[31m{line}\033[0m")
         return None
 
 def operate_the_code(code, spaces_in_tab):
+    global debug_mode, debug_text_color
     global variables
     results_of_all_conditions = {}
     variables = {}
@@ -169,14 +178,14 @@ def operate_the_code(code, spaces_in_tab):
     while index <= len(code):
         if index != len(code) or index > len(code):
             line = code[index]
-        #print("\033[90m#variables:", variables,"\033[0m")
+        if debug_mode == "variables" or debug_mode == "all": print(f"{debug_text_color}#variables:", variables, "\033[0m")
         
         steps = operation_steps(line)
         line_index = code.index(line)
         tabs_count = correct_tabs(line, spaces_in_tab)
         line_without_tabs = line.lstrip()
 
-        #print(f"\033[90m#tabs count: {tabs_count}, #line({index}): {line_without_tabs}\033[0m")
+        if debug_mode == "default" or debug_mode == "all": print(f"{debug_text_color}#tabs count: {tabs_count}, #line({index}): {line_without_tabs}\033[0m")
 
         if previous_condition(results_of_all_conditions, tabs_count) == True:
             if line_without_tabs.startswith("if"):
@@ -184,18 +193,17 @@ def operate_the_code(code, spaces_in_tab):
                 if result in results_of_all_conditions:
                     del results_of_all_conditions[result]
                 results_of_all_conditions[result] = line_index
-                #print("\033[90m#results of all conditions:", results_of_all_conditions)
+                if debug_mode == "results" or debug_mode == "all": print(f"{debug_text_color}#results of all conditions:", results_of_all_conditions) 
             
             if line_without_tabs.startswith("print(") and line_without_tabs.endswith(")"):
                 result = print_function(line_without_tabs)
-                print(result)
+                print(result) if debug_mode == False else print(f"{default_text_color}{result}\033[0m") 
 
             if "=" in line_without_tabs and not line_without_tabs.startswith(("while", "if", "elif")):
                 variables = convert_value(line_without_tabs, line_index)
             
             if line_without_tabs.startswith("for"):
                 result = line_without_tabs.replace("for ", "").replace(":", "").replace("range", "")
-                #print(f"\033[90m#result: {result}")
 
                 local_variable_name = []
                 for i in range(len(result)):
@@ -208,7 +216,6 @@ def operate_the_code(code, spaces_in_tab):
                 value_start = []
                 value_end = []
                 result = result.replace(local_variable_name, "").replace("in", "").replace("(", "")
-                #print(f"\033[90mm#result: {result}\033[0m")
 
                 for i in range(len(result)):
                     if result[i] == ",":
@@ -229,13 +236,11 @@ def operate_the_code(code, spaces_in_tab):
                 if for_value == 0:
                     for_value = value_start
                 
-                #print(f"\033[90m#local variable:\n#Name {local_variable_name} #Value {value_start}, {value_end}, {for_value}\033[0m")
+                if debug_mode == "results" or debug_mode == "all" or debug_mode == "for": print(f"{debug_text_color}#local variable:\n#Name {local_variable_name} #Value {value_start}, {value_end}, {for_value}\033[0m") 
 
                 for_value = int(for_value)
                 value_end = int(value_end)
-                #print(for_value)
                 variables[local_variable_name] = for_value, (value_end, tabs_count, index)
-                #print(for_value)
 
             if line_without_tabs.startswith("while"):
                 result = if_function(steps, line_index, line_without_tabs)
@@ -252,7 +257,7 @@ def operate_the_code(code, spaces_in_tab):
                                 while_skipping = False
                     continue
 
-                #print("\033[90m#dictionary:", while_dictionary,"\033[0m")
+                if debug_mode == "variables" or debug_mode == "all" or debug_mode == "while": print(f"{debug_text_color}# while dictionary:", while_dictionary,"\033[0m") 
             
             if while_dictionary:
                 last_while = next(reversed(while_dictionary))
@@ -272,10 +277,10 @@ def operate_the_code(code, spaces_in_tab):
             for el in variables:
                 if hasattr(variables[el], '__len__'):
                     if variables[el][0] != variables[el][1][0]:
-                        #print(f"\033[90m# {tabs_count} == {variables[el][1][1]}:", tabs_count == variables[el][1][1], "(tabs count)\033[0m")
-                        #print(f"\033[90m# {index+1} == {len(code)}:",  index+1 == len(code), "(code end)\033[0m")
+                        if debug_mode == "for" or debug_mode == "all": print(f"{debug_text_color}# {tabs_count} == {variables[el][1][1]}:", tabs_count == variables[el][1][1], "(tabs count)\033[0m") 
+                        if debug_mode == "for" or debug_mode == "all": print(f"{debug_text_color}# {index+1} == {len(code)}:",  index+1 == len(code), "(code end)\033[0m") 
                         if index == len(code) or tabs_count == variables[el][1][1] and line_without_tabs != "":
-                            #print(f"\033[90m# index({index}) = {variables[el][1][2]}\033[0m")
+                            if debug_mode == "for" or debug_mode == "all": print(f"{debug_text_color}# index({index}) = {variables[el][1][2]}\033[0m") 
                             index = variables[el][1][2]
                             if True in results_of_all_conditions:
                                 del results_of_all_conditions[True]
@@ -286,40 +291,74 @@ def operate_the_code(code, spaces_in_tab):
                         del variables[local_variable_name]
                         results_of_all_conditions[True] = line_index
                         break
-                    
+
         index += 1
 
 def terminal():
     while True:
         command = input("@Python-Imitator:~# ")
-        if command.startswith("vim ") or command.startswith("python3 ") or command.startswith("sit") or command == "ls" or command == "help":
-            result = command_result(command)
-            return result
+        result = command_result(command)
+        return result
+
+def wait_for_i():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            key = sys.stdin.read(1)
+            if key == 'i':
+                break
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 def get_code():
     while True:
         command = input("\033[34m~ \033[0m")
-        if command == ":wq!":
-            return code
-        code.append(command)
+        if command.startswith(":"):
+            if command == ":wq!":
+                return code
+            else:
+                print(f"\033[41mE492: Not an editor command: {command}\033[0m", end='', flush=True)
+                wait_for_i()
+                print("\033[2K\r", end='')
+        else:     
+            code.append(command)
 
 def command_result(command):
+    global debug_mode
+    
     if command.startswith("vim "):
         value = command.replace("vim ", "", 1)
         return value, "vim"
-    if command.startswith("python3 "):
+    elif command.startswith("python3 "):
         value = command.replace("python3 ", "", 1)
         return value, "python3"
-    if command.startswith("sit[") and command.endswith("]"):
-        value = command.replace("sit[", "").replace("]", "")
+    elif command.startswith("sit"):
+        value = command.replace("sit[", "").replace("]", "").replace("sit", "")
         return value, "sit"
-    if command == "ls":
-        return '', "ls"
-    if command == "help":
+    elif command == "ls":
+        return ' ', "ls"
+    elif command == "help":
         print("\nvim <name> # create a new project")
         print("python3 <name> # run project")
         print("sit[<value>] # spaces count in 1 tab\n")
-        return '', "help"
+        return ' ', "help"
+    elif command.startswith("rm"):
+        value = command.replace("rm ", "", 1)
+        return value, "remove"
+    elif command.startswith("debug"):
+        value = command.replace("debug", "").replace("[", "").replace("]", "").replace("=", "").strip()
+        if "True" in value:
+            debug_mode = value.replace("True", "").strip() or "all"
+        elif "False" in value:
+            debug_mode = False
+        else:
+            debug_mode = value or "default"
+        print(f"Debug mode set to: {debug_mode}")
+        return debug_mode, "debug"
+    else:
+        return f"Command '{command}' not found", None
     
 def open_code(code):
     for line in code:
@@ -327,30 +366,41 @@ def open_code(code):
         print(f"\033[34m{index}\033[0m", line)
     print("\n--INSERT--")
 
+
+all_codes = {}
 code = []
 code_name = ''
 spaces_in_tab = 1
+debug_text_color = "\033[90m"
+default_text_color = "\033[94m"
+debug_mode = False
 
 while True:
     value, command = terminal()
-    #print(value, command)
-    if code_name == '' and command != "sit":
-        code_name = value
+    print(value, command)
+    if command == None:
+        print(value)
+    code_name = value
     if command == "ls":
-        print(code_name)
-    if len(value) != 0 or command != "ls" or command != "help" or command != "sit":
+        print(f"{" ".join([x for x in all_codes])}")
+    if len(value) != 0:
         if command == "vim":
-            if len(code) == 0 or value != code_name:
+            if not value in all_codes or len(all_codes[value]) == 0:
                 code = get_code()
+                all_codes[code_name] = code
             else:
-                open_code(code)
-        if command == "python3" and value == code_name:
-            operate_the_code(code, spaces_in_tab)
+                open_code(all_codes[value])
+            code = []
+        if command == "python3" and value in all_codes:
+            operate_the_code(all_codes[value], spaces_in_tab)
+            code = []
+        if command == "remove" and value in all_codes:
+            del all_codes[value]
         if command == "sit":
-            print(value)
-            if 0 >= int(value) or not value.isdigit():
-                print(f"ValueError: sit[\033[41m{value}\033[0m]")
-                break
+            if value.strip() == "":
+                print(f"Spaces in one tab: [{spaces_in_tab}]")
+            elif not value.isdigit() or 0 >= int(value):
+                print(f"ValueError: sit[\033[41m{value}\033[0m]\n                {"".join(["^" for x in range(len(value))])}\nThe command sit[] cannot have a value equal to zero, a negative number, or a letter.")
             else:
                 spaces_in_tab = int(value)
     else:
